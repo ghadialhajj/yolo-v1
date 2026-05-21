@@ -27,7 +27,9 @@ class YOLOv1ResNet(nn.Module):
         )
 
     def forward(self, x):
-        return self.model.forward(x)
+        for layer in self.model:
+            x = layer(x)
+        return x
 
 
 class DetectionNet(nn.Module):
@@ -61,10 +63,9 @@ class DetectionNet(nn.Module):
         )
 
     def forward(self, x):
-        return torch.reshape(
-            self.model.forward(x),
-            (-1, config.S, config.S, self.depth)
-        )
+        for layer in self.model:
+            x = layer(x)
+        return torch.reshape(x, (-1, config.S, config.S, self.depth))
 
 
 ###########################
@@ -133,9 +134,11 @@ class YOLOv1(nn.Module):
                 nn.LeakyReLU(negative_slope=0.1)
             ]
         # layers.append(Probe('conv6', forward=probe_dist))
+        # During pretraining, we replace the following layers with average pooling and a 1024xnum_classes(=1000) FC layer.
+        # During detection training, we add these layers, which are the same as the ones in the paper, on top of the pretrained backbone.
 
         layers += [
-            nn.Flatten(),
+            nn.Flatten(start_dim=0),
             nn.Linear(config.S * config.S * 1024, 4096),                            # Linear 1
             nn.Dropout(),
             nn.LeakyReLU(negative_slope=0.1),
@@ -147,10 +150,13 @@ class YOLOv1(nn.Module):
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        return torch.reshape(
-            self.model.forward(x),
-            (x.size(dim=0), config.S, config.S, self.depth)
-        )
+        print(x.shape)
+        for layer in self.model:
+            shape_before = x.shape
+            x = layer(x)
+            if not isinstance(layer, nn.LeakyReLU):
+                print(layer, "->", x.shape)
+        return torch.reshape(x, (config.S, config.S, self.depth))
 
 
 #############################
@@ -194,3 +200,11 @@ def probe_mean(x):
 
 def probe_dist(x):
     print(torch.min(x).item(), '|', torch.median(x).item(), '|', torch.max(x).item())
+
+
+if __name__ == '__main __':
+    model = YOLOv1()
+    fake_image = torch.randn(3, config.IMAGE_SIZE[0], config.IMAGE_SIZE[1], requires_grad=True)
+
+    output = model(fake_image)
+    print(output.shape)
