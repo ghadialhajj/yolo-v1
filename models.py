@@ -202,7 +202,7 @@ def probe_dist(x):
     print(torch.min(x).item(), '|', torch.median(x).item(), '|', torch.max(x).item())
 
 
-if __name__ == '__main __':
+if __name__ == '__main__':
     model = YOLOv1()
     fake_image = torch.randn(3, config.IMAGE_SIZE[0], config.IMAGE_SIZE[1], requires_grad=True)
 
